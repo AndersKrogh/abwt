@@ -1,0 +1,81 @@
+# This file is part of the abwt package.
+# Copyright 2016-2019 by Anders Krogh.
+# The abwt package is licensed under the GPLv3, see the file LICENSE.
+
+makeabwt
+Specification of variables that can be set by options
+
+To be read by OptionsAndArguments
+
+HELPTEXT
+---
+makeabwt takes a fasta file as argument and calculates the BWT and FM index.
+Output file name given with -o (defaults to the input file name)
+
+Example cmd line
+   makeabwt -a DNA -o outputname infilename.fsa
+or for proteins (default alphabet)
+   makeabwt -o outputname infilename.fsa
+or for some other alphabet
+   makeabwt -a abcdefgHIJK -o outputname infilename.fsa
+
+It can also take sequences on stdin, in which case you have to give
+the filesize in millions of letters (rounded up), e.g. -l 3000
+corresponding to 3 billion letters.
+
+Files are created with outputname followed by the extension fmi
+
+While running, the program creates a couple of temporary files, which
+are deleted at the end.
+
+See options below
+---
+END
+
+# You can set program name here
+# NAME makeabwt
+
+ARG char* infilename NULL
+Name of an input file (stdin if no file is given, in which case you
+need to give length)
+
+# Name for output files
+VALUE char* outfilename|o NULL
+Name of output. Several files with different extensions are produced
+(if not given, input file name is used).
+
+VALUE char* Alphabet|a protein
+Alphabet used. Instead of alphabet you can specify protein, DNA, IUPAC, or
+RNA, in which case the alphabet is ACDEFGHIKLMNPQRSTVWYX, ACGTN,
+ACGTNRYSWKMBDHVN, or ACGUN.
+You can give qualifiers: /wildcard, /casesens, /variants to add
+wildcard character (N or X), make a case sensitive index and add '|'
+for variant encoding, repectively. These can be abbreviated.
+Example: DNA/wild/var will give the alphabet ACGT|N
+
+VALUE int nThreads|t 2
+Number of threads
+
+VALUE double length|l 0
+Length of concatenated sequence in millions (one decimal, round up).<br>Used when reading from stdin. If file name is given, length is estimated<br>from file size and length needs not be specified.
+
+VALUE int checkpoint|e 5
+Exponent for suffix array checkpoints. There is a checkpoint for every
+2^e points. Value around 5 is a good compromise between speed and memory.
+
+SWITCH int revComp|r 0
+Add reverse complement sequences, so both strands are present. Works only
+for DNA.
+
+SWITCH int reverse|R 0
+Make the BWT of the reversed sequences.
+
+SWITCH int revsort|s 0
+The termination symbols sorts as reverse sequences. This will make the
+BWT more compressible.
+
+VALUE int word_len|k 0
+Word length for buckets in sorting. If k=0, it is set internally to
+k=4 for alphabets with at most 8 characters, k=3 for alphabets with at most
+16 characters and k=2 otherwise.
+

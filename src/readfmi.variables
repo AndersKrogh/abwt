@@ -1,0 +1,80 @@
+# This file is part of the abwt package.
+# Copyright 2016-2019 by Anders Krogh.
+# The abwt package is licensed under the GPLv3, see the file LICENSE.
+
+sa_reconstruct
+Specification of variables that can be set by options
+
+To be read by OptionsAndArguments
+
+HELPTEXT
+---
+readfmi reads an fmi file (made by mkbwt and mkfmi) and outputs
+sequences in fasta, seq ids, or a portion of the suffix array.
+
+First arg is index name and then options follows.
+
+Reconstruct sequences (linelength 70):
+readfmi <indexname> -p 70
+
+Reconstruct suffix array from position 1000 to 1000+200:
+readfmi <indexname> -s 1000 200
+
+Print ids and seq info:
+readfmi <indexname> -i
+
+It is very slow and mostly for debugging
+
+See options below
+---
+END
+
+ARG char* bwtfile NULL
+Name of file containing BWT (output from mkfmi)
+
+VALUE char* Lookup|L NULL
+Look up the suffix interval for a sequence. Outputs the sequence, the start
+of the SI and the length of the SI. Values of 0 0 means no match.
+For example \"-l AACC\" will look up the SI for AACC.
+
+VALUE char* lookup|l NULL
+As -L, but also prints the correponding suffix array (as -s). Use -m to add
+margins.
+
+VALUE int* sarray|s 2
+Print suffix array interval. Takes two integers: start and length. Print the
+interval starting at the first value with a length of the second value.
+For instance \"-s 100 20\" will print it starting at 100 with length 20.
+Values are ignored if -l or -L are used.
+
+VALUE int* marray|m 2
+Extra margin for the array you want to print. Upper and lower. Let us say you
+want to print and interval from 100 and a length of 20. Then if you have a
+margin set to 10 and 5 (-m 10 5), you get an interval from 90 with a length
+of 35. So \"-s 100 20 -m 10 5\" is identical to \"-s 90 35\".
+
+
+VALUE char* format|f b10i10l10 p5 B s30
+Format telling what to print.
+  b is SA index.
+  i is position in sequence.
+  l is seq length (negative if reverse strand).
+  f is fmi value for BWT character at this position.
+  p is prefix (except BWT character)
+  s is suffix
+All the above can be followed by a field width.
+  B is BWT charater (last char in prefix)
+  n is sequence name (should always be last - there is no field width)
+Example: \"b9f9  p5 B s50 n\" prints SA index, FMI value (both 9 chars), a
+prefix of 5 chars (p5), the BWT letter (B), 50 chars of the suffix (s50),
+and the seq id (n).
+
+SWITCH int PrintId|i 0
+Print sequence information
+
+VALUE int PrintSeq|p 0
+Print all sequences in fastaformat (value is line length). If value is<br>negative (!), print ID, space, sequence on single line. SLOW!
+
+VALUE int forward|a 0
+Takes integer suffix array index. Reconstruct sequence by forward recursion
+from that index.

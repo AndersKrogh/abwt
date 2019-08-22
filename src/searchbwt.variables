@@ -1,0 +1,36 @@
+# This file is part of the abwt package.
+# Copyright 2016-2019 by Anders Krogh.
+# The abwt package is licensed under the GPLv3, see the file LICENSE.
+
+searchbwt
+Specification of variables that can be set by options
+
+To be read by OptionsAndArguments
+
+HELPTEXT
+---
+searchbwt takes index name as argument and searches for longest matches
+
+Example cmd line
+   searchbwt -L 5 database queryfile
+
+where -L sets the minimum length of a match
+
+See options below
+---
+END
+
+ARG char* indexfile NULL
+Name of file containing index (output from mkfmi)
+
+ARG char* qfile NULL
+Name of file with query sequences (stdin if no file is given)
+
+VALUE int minLen|L 5
+Minimum length of a match. Make sure to set it (e.g. 15 for DNA and 5<br>for proteins)
+
+VALUE int maxMatch|m 0
+Maximum number of matches returned. However, all matches of a certain<br>length are always returned. With a value of 1, ALL maximum length matces<br>are returned.
+
+SWITCH int caseSens|c 0
+The sequences are read case sensitive

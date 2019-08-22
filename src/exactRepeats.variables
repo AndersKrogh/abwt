@@ -1,0 +1,47 @@
+# This file is part of the abwt package.
+# Copyright 2016-2019 by Anders Krogh.
+# The abwt package is licensed under the GPLv3, see the file LICENSE.
+
+Specification of variables that can be set by options
+
+To be read by OptionsAndArguments
+
+HELPTEXT
+---
+exactRepeats takes index name as argument and searches for likely
+exact repeats in a length interval specified.
+
+Program is made with CRISPR repeats in mind.
+
+Index of reads/contigs/genomes must be built using makeabwt
+
+Example cmd line
+   exactRepeats index_file_name -minlen 20 -maxlen 50
+
+to search for repeats between 20 and 50
+
+See options below
+---
+END
+
+ARG char* indexfile NULL
+Name of file containing BWT/FMI index
+
+VALUE int minlen|m 25
+Integer specifying the minimum length of reapeats
+
+VALUE int maxlen|M 45
+Integer specifying the maximum length of reapeats
+
+VALUE int min_interval|i 10
+Integer specifying the maximum length of reapeats
+
+VALUE double maxfrac|f 0.8
+Select repeats where the maximum fraction of the neihboring letter is maxfrac.
+
+SWITCH int printall|a 0
+Print all repeats found with SUBSTRING keyword in id of those
+that would not be printed without -a
+
+VALUE char* prefix|p Repeat
+The prefix for the repeats discovered
