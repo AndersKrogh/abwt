@@ -256,6 +256,19 @@ void recursive_free_SI(SI *si) {
   free(si);
 }
 
+/* Lookup the SI for sequence str. si must be allocated with length 2 */
+IndexType bwtLookupRaw(FMI *f, char *str, int len, IndexType *si) {
+  IndexType l;
+
+  // Go through the sequence from the back
+  InitialSI(f, str[--len], si);
+  while ( len-- > 0 ) {
+    l = UpdateSI(f, str[len], si, NULL);
+    if (l <= 0) break;
+  }
+  if (l <= 0) l=0;
+  return l;
+}
 
 
 /* Lookup the SI for sequence str */
@@ -482,7 +495,6 @@ void construct_fmi_from_files(char *filename, int removefiles, int msg) {
 
   evalFunc needs to do whatever needs to be done.
 
-  HACK: If track_si>1, SIs are also EXPANDED
  **********************************************************************/
 
 

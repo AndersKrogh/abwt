@@ -4,19 +4,21 @@
 
 # for profilling use "make PROF=-pg"
 
-#OFLAGS = -O3
-OFLAGS = -g
+OFLAGS = -O3
+#OFLAGS = -g
 
 # The FMITYPE's are 1:compact (standard) 2: simple 3: funny
 
 CFLAGS  = $(OFLAGS) $(PROF) -DFMITYPE=1 -I ../aklib -Wall
-LDFLAGS  = -lpthread -lm -L../aklib/ $(PROF)
-LDLIBS  = -laklib
+LDFLAGS  = -L../aklib/ $(PROF)
+LDLIBS  = -laklib -lm -lpthread
+
+BINDIR = ${HOME}/usr/bin/
 
 PERL = /usr/bin/perl
 
 SRC = src
-TOOLDIR = ../tools
+TOOLDIR = ../aklib/tools
 TOOLS = $(CURDIR)/$(TOOLDIR)
 BACKUP = backup
 VPATH = $(SRC)
@@ -25,6 +27,10 @@ VPATH = $(SRC)
 EXEFILES = makeabwt readfmi searchbwt exactRepeats
 
 ALL: $(EXEFILES)
+
+INSTALL: ALL
+	cp -p $(EXEFILES) ${BINDIR}
+
 
 makeabwt: makeabwt.o bwt.o fmi.o readLongFasta.o suffixArray.o multikeyqsort.o interval.o
 
@@ -67,16 +73,16 @@ interval.o: interval.c interval.h
 # h files
 
 makeabwt_vars.inc: makeabwt.variables
-	cd $(SRC); $(TOOLS)/OptionsAndArguments makeabwt.variables > $@
+	$(TOOLS)/OptionsAndArguments $< > $(SRC)/$@
 
 searchbwt_vars.inc: searchbwt.variables
-	cd $(SRC); $(TOOLS)/OptionsAndArguments searchbwt.variables > $@
+	$(TOOLS)/OptionsAndArguments $< > $(SRC)/$@
 
 readfmi_vars.inc: readfmi.variables
-	cd $(SRC); $(TOOLS)/OptionsAndArguments readfmi.variables > $@
+	$(TOOLS)/OptionsAndArguments $< > $(SRC)/$@
 
 exactRepeats_vars.inc: exactRepeats.variables
-	cd $(SRC); $(TOOLS)/OptionsAndArguments exactRepeats.variables > $@
+	$(TOOLS)/OptionsAndArguments $< > $(SRC)/$@
 
 
 cleansrc:

@@ -55,6 +55,7 @@ uchar *retrieve_seq(int snum, BWT *b);
 IndexType InitialSI(FMI *f, uchar ct, IndexType *si);
 IndexType UpdateSI(FMI *f, uchar ct, IndexType *si, IndexType *newsi);
 void recursive_free_SI(SI *si);
+IndexType bwtLookupRaw(FMI *f, char *str, int len, IndexType *si);
 SI *bwtLookup(FMI *f, char *str, int len);
 SI *maxMatches(FMI *f, char *str, int len, int L, int max_matches);
 SI *greedyExact(FMI *f, char *str, int len, int L, int jump);

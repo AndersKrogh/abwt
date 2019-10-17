@@ -383,47 +383,56 @@ int ExpandSI(FMI *fmi, interval *parent, expandParam *param) {
 
 
 /*
-  Function to record letters for each child from the parent
-  Assume that children are already calculated
+
+  THIS SHOULD BE REPLACED BY FUNCTION UpdateInterval_track
+
+  Function to record letters from the parent to each child
+  For each child, an int array is created (si->ptr) that will contain either
+    - the negative number of backward extensions for that sequence, or
+    - the number of the parent (non-negative)
+
+  Assumes that children are already calculated
 
   If parent->ptr==NULL, it is assumed positions are 0,1,2,...
 
   THIS DOES NOT WORK WITH FUNNY FMI (there is no fmi_get_letter)
 */
 void trackSIpositions(FMI *fmi, interval *parent) {
-  int *index = (int *)(parent->ptr);
-  int i, c, l, k;
-  int count[128], isize[128], *iarrays[128];
+  int *parent_track = (int *)(parent->ptr);
+  int i, c, wparent, k;
+  int kidindex[128], wkids[128], *kids_track[128];
   interval *si;
 
-  l = interval_width(parent);
+  wparent = interval_width(parent);
 
   for (c=0; c<fmi->alen; ++c) {
     si = parent->kids[c];
-    iarrays[c] = NULL;
-    count[c] = isize[c] = 0;
+    kids_track[c] = NULL;
+    kidindex[c] = wkids[c] = 0;
     if (si) {
-      isize[c] = interval_width(si);
-      si->ptr = calloc(isize[c],sizeof(int));
-      iarrays[c] = (int*)si->ptr;
+      wkids[c] = interval_width(si);
+      si->ptr = calloc(wkids[c],sizeof(int));
+      kids_track[c] = (int*)si->ptr;
     }
   }
   // Go through bwt
-  if (index) {
-    for (i=0; i<l; ++i) {
+
+  // parent_track is the parent index
+  if (parent_track) {
+    for (i=0; i<wparent; ++i) {
       c = fmi_get_letter(fmi->bwt[parent->i[0]+i]);
-      if (isize[c]) {
-	k = index[i];
+      if (wkids[c]) { // If a kid exists
+	k = parent_track[i];
 	if (k<0) k -= 1;     // Negative numbers count the number of backward extensions
-	iarrays[c][count[c]++] = k;
+	kids_track[c][kidindex[c]++] = k;
       }
     }
   }
   else {
-    for (i=0; i<l; ++i) {
+    for (i=0; i<wparent; ++i) {
       c = fmi_get_letter(fmi->bwt[parent->i[0]+i]);
-      // If the parent array does not exist, the position in the parent is recorded as 0...l-1
-      if (isize[c]) iarrays[c][count[c]++] = i;    
+      // If the parent array does not exist, the position in the parent is recorded as 0...wparent-1
+      if (wkids[c]) kids_track[c][kidindex[c]++] = i;    
     }
   }
 }
@@ -457,7 +466,6 @@ uchar *get_bwt(const FMI *f, const IndexType start, const IndexType length) {
 #endif
   return bwt;
 }
-
 
 
 
