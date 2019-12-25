@@ -1,0 +1,53 @@
+# This file is part of the abwt package.
+# Copyright 2016-2020 by Anders Krogh.
+# The abwt package is licensed under the GPLv3, see the file LICENSE.
+
+Specification of variables that can be set by options
+
+To be read by OptionsAndArguments
+
+HELPTEXT
+---
+
+Index of reads/contigs/genomes must be built using makeabwt
+
+See options below
+---
+END
+
+ARG char* indexfile NULL
+Name of file containing BWT/FMI index
+
+VALUE int kmax|k 3
+The k-mer size
+
+VALUE int kmin|m 2
+The minimum k for interpolation
+
+VALUE double alpha|a 100.
+The pseudocount weight
+
+VALUE char* sequence|s NULL
+Sequence for which to calculate probabilities for position k
+
+SWITCH int genome|g 0
+Compute probabilities for the entire genome in index and print for each
+position, where it can be calculated (no Ns in window).
+
+SWITCH int GenomeStats|G 0
+As -g, but only print the final statistics (even if -g is also set).
+
+VALUE char* identifier|i NULL
+Restrict to the one sequence in index (e.g. chromosome) with this id
+(use with -g and -G). Has to macth fasta ID exactly.
+
+SWITCH int Markov|M 0
+Calculate Markov probabilities instead of central probs.
+
+SWITCH int bothdir|b 0
+Bidirectional model. Calculate Markov probabilities in both directions.
+
+VALUE int subtractRef|r -1
+Subtract 1 for the reference base. Set to zero to suppress and positive to
+enforce. If not set or if value is negative, the default is used: on when
+used on a seqeuence in the index (-i -g -G), and otherise 0.

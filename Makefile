@@ -40,7 +40,7 @@ readfmi: readfmi.o bwt.o suffixArray.o fmi.o interval.o
 
 searchbwt: searchbwt.o bwt.o suffixArray.o fmi.o interval.o
 
-
+predictDNA: predictDNA.o bwt.o suffixArray.o fmi.o interval.o
 
 # o files
 
@@ -56,6 +56,8 @@ readfmi.o: readfmi.c readfmi_vars.inc bwt.h fmi.h common.h version.h
 exactRepeats.o: exactRepeats.c exactRepeats_vars.inc bwt.h fmi.h common.h version.h
 	$(CC) $(CFLAGS) -c $<
 
+predictDNA.o: predictDNA.c predictDNA_vars.inc bwt.h fmi.h common.h version.h
+
 readLongFasta.o: readLongFasta.c readLongFasta.h common.h
 
 fmi.o: fmi.c fmi.h common.h
@@ -69,6 +71,7 @@ suffixArray.o: suffixArray.c suffixArray.h bwt.h fmi.h common.h
 multikeyqsort.o: multikeyqsort.c multikeyqsort.h 
 
 interval.o: interval.c interval.h
+
 
 # h files
 
@@ -84,6 +87,8 @@ readfmi_vars.inc: readfmi.variables
 exactRepeats_vars.inc: exactRepeats.variables
 	$(TOOLS)/OptionsAndArguments $< > $(SRC)/$@
 
+predictDNA_vars.inc: predictDNA.variables
+	$(TOOLS)/OptionsAndArguments $< > $(SRC)/$@
 
 cleansrc:
 	- cd $(SRC); rm -f *.old *~ *_vars.inc
