@@ -236,6 +236,7 @@ typedef struct {
   BWT *bwt;
   int kmax;
   int kmin;
+  int wsize;
   double alpha;
   int Markov;
   int bothdir;
@@ -245,58 +246,65 @@ typedef struct {
   IndexType total;
 } containerStruct;
 
+static void printVCFheader(FILE *out) {
+  fprintf(out,"##fileformat=VCFv4.3\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER INFO\n");
+}
+
+static void printVCFline(FILE *out, char *id, IndexType position, char *seq, int seqlen,
+			 int iref, int maxi, char *alphabet, double *p) {
+  int i;
+  fprintf(out,"%s\t%ld\t",id,position);
+  printSeqRaw(out, seq, seqlen+1, alphabet, 0, seqlen);
+  fprintf(out,"\t%c\t%c\t%lf\t%s\tE=%lf;P",alphabet[iref],alphabet[maxi],
+	 p[iref],
+	 (maxi==iref?"PASS":"no"),
+	 entropy(p));
+  for (i=1; i<=4; ++i) fprintf(out,"%c%lf",(i==1?'=':','),p[i]);
+  printf("\n");
+}
+
 
 /*
   Estimate probabilities and print for sequence seq.
   The sequence must have 2*kmax letters (or kmax+1 if Markov and NOT bidirectional)
 */
-void seq_probabilities (char *seq, char *rev, char *id, IndexType pos, containerStruct *c) {
+static void seq_probabilities (char *seq, char *rev, char *id, IndexType pos, containerStruct *c) {
   int N, i, count, maxi, iref;
-  int k2=2*c->kmax;
+  int printlen=c->wsize;
   double p[6], p2[6];
-  
+  char revcomp[256];
+
+  // Make revcomp
+  if (!rev && c->bothdir) {
+    rev=revcomp;
+    for (i=0; i<c->wsize;++i) rev[c->wsize-1-i] = c->bwt->astruct->compTrans[(int)(seq[i])];
+  }
+
   // Check if seq is appropriate
-  for (i=0, N=0; i<=c->kmax; ++i) if ( seq[i]<1 || seq[i]>4 ) { N=1; break; }
-  // If central prob or bothdir, check symmetric window
-  if (N==0 && (!c->Markov || c->bothdir) ) for ( ; i<=k2; ++i) if ( seq[i]<1 || seq[i]>4 ) { N=1; break; }
+  for (i=0, N=0; i<c->wsize; ++i) if ( seq[i]<1 || seq[i]>4 ) { N=1; break; }
   if (N==0) {
-    if (c->printPos) printf("%s\t%ld\t",id,pos+c->kmax+1);   // first base has number 1
+    //if (c->printPos) printf("%s\t%ld\t",id,pos+c->kmax+1);   // first base has number 1
     if (c->Markov) {
       count = MarkovProbs(c->bwt, seq, c->kmin, c->kmax, p, c->alpha, c->subtract1);
       if (c->bothdir) {
-	// Last base of reverse: x=bufsize2-1-dz;
-	// First base is x-2*kmax = bufsize2-1-dz-k2
 	count += MarkovProbs(c->bwt, rev, c->kmin, c->kmax, p2, c->alpha, c->subtract1);
 	for (i=1; i<=4; ++i) p[i] = 0.5*(p[i]+p2[(int)(c->bwt->astruct->compTrans[i])]);
-	if (c->printPos) printSeqRaw(stdout, seq, c->kmax+2, c->bwt->astruct->a, 0, k2+1);
       }
-      else if (c->printPos) printSeqRaw(stdout, seq, c->kmax+2, c->bwt->astruct->a, 0, c->kmax+1);
+      else printlen=c->kmax+1;
     }
     else {
       count = CentralProbs(c->bwt, seq, c->kmin, c->kmax, p, c->alpha, c->subtract1);
-      if (c->printPos) printSeqRaw(stdout, seq, c->kmax+2, c->bwt->astruct->a, 0, k2+1);
     }
     maxi=1;
     for (i=2; i<=4; ++i) if (p[maxi]<p[i]) maxi=i;
     iref = seq[c->kmax];
-    // REF\tALT\tQUAL\tFILTER INFO
-    if (c->printPos) {
-      printf("\t%c\t%c\t%lf\t%s\tE=%lf;P",c->bwt->astruct->a[iref],c->bwt->astruct->a[maxi],
-	     p[iref],
-	     (maxi==iref?"PASS":"no"),
-	     entropy(p));
-      for (i=1; i<=4; ++i) printf("%c%lf",(i==1?'=':','),p[i]);
-      printf("\n");
-    }
     if (iref == maxi) c->correct+=1;
     c->total += 1;
-  } // if (N==0)
+
+    if (c->printPos) printVCFline(stdout, id, pos+c->kmax+1, seq, printlen,
+		 iref, maxi, c->bwt->astruct->a, p);
+  }
 }
-
-
-
-
-
 
 
 
@@ -305,7 +313,14 @@ int main (int argc, char **argv) {
   FILE *fp;
   int c;
   double p[10];
-  Sequence *s;
+  Sequence *seq;
+
+  int i, iseq, dz;
+  IndexType l, k, pos;
+  const int bufsize=64, bufsize2 = 128;
+  char dbuffer[bufsize2], rbuffer[bufsize2], *id;
+  uchar cur;
+
   containerStruct *cs = (containerStruct*)malloc(sizeof(containerStruct));
   
   /* Parsing options and arguments */
@@ -339,34 +354,55 @@ int main (int argc, char **argv) {
   cs->total = 0;
   cs->subtract1 = 1;
 
+  //total window width
+  if ( !cs->Markov || cs->bothdir ) cs->wsize = 2*cs->kmax+1;
+  else cs->wsize=cs->kmax+1;
+
+  /*
   if (sequence) {
     if (strlen(sequence)<kmax+1) ERROR("Sequence too short",1);
     c = sequence[kmax];
     sequence[kmax] = '\0';
     printf("Sequence %s* ref=%c\n", sequence, c);
     sequence[kmax] = c;
-    s = make_Sequence(sequence,strdup("testseq"), cs->bwt->astruct);
+    seq = make_Sequence(sequence,strdup("testseq"), cs->bwt->astruct);
     if (subtractRef < 0) cs->subtract1 = 0;
-    if (Markov) MarkovProbs(cs->bwt, s->s, kmin, kmax, p, alpha, cs->subtract1);
+    if (Markov) MarkovProbs(cs->bwt, seq->s, kmin, kmax, p, alpha, cs->subtract1);
     else CentralProbs(cs->bwt, s->s, kmin, kmax, p, alpha, cs->subtract1);
     for (c=1; c<=4; ++c) printf("%lf ",p[c]);
     printf("<- probs for A,C,G and T\n");
   }
+  */
 
+  if (sequence) {
+    char *s;
+    char eof = 0;
+    FILE *infile = stdin;
+    if ( strncmp(sequence,"stdin",5) ) infile=open_file_read(sequence,NULL,"Problem opening sequence file");
+    i = ReadSequenceFileHeader(infile,'>');
+    if (subtractRef < 0) cs->subtract1 = 0;
+    printVCFheader(stdout);
+    while (!eof) {
+      seq = readFasta(infile,cs->bwt->astruct,1024,0,&eof);
+      if (!seq) break;
+      l = seq->len;
+      fprintf(stderr,"Analyzing sequence \"%s\" of length %ld\n",seq->id, l);
+      s = seq->s;
+      for (pos=0; pos<=l-cs->wsize; ++pos) {
+	seq_probabilities(s, NULL, seq->id, pos, cs);
+	++s;
+      }
+    }
+    fclose(infile);
+  }
 
   if (genome) {
-    int i, iseq, dz, k2=2*kmax;
-    IndexType l, k, pos;
-    const int bufsize=64, bufsize2 = 128;
-    char dbuffer[bufsize2], rbuffer[bufsize2], *id;
-    uchar cur;
-    int total=0, correct=0;
 
     // For sequence included in index, we assume that 1 is subtracted
     // unless it is set to 0 by user.
     if (subtractRef == 0) cs->subtract1 = 0;
-    
-    printf("##fileformat=VCFv4.3\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER INFO\n");
+
+    printVCFheader(stdout);
     for (iseq=0; iseq<cs->bwt->s->nseq; ++iseq) {
       l = cs->bwt->s->seqlengths[iseq];
       if (l>=0) i=1;
@@ -386,63 +422,25 @@ int main (int argc, char **argv) {
 	  dbuffer[dz] = cs->bwt->astruct->compTrans[cur];
 	  rbuffer[bufsize2-1-dz] = cur;
 	}
-	for (pos=0; pos<l-kmax-1; ++pos) {
+	for (pos=0; pos<=l-cs->wsize; ++pos) {
 	  // pos is the start of the window
 	  // dz is start in buffer of direct strand
 	  dz = (int)(pos%bufsize);
 	  // call function with dbuffer+dz
-	  seq_probabilities(dbuffer+dz, rbuffer+bufsize2-1-dz-k2, id, pos, cs);
-
-	  /*
-	    
-	  // Check if seq is appropriate
-	  for (i=0, N=0; i<=kmax; ++i) if ( dbuffer[dz+i]<1 || dbuffer[dz+i]>4 ) { N=1; break; }
-	  // If central prob or bothdir, check symmetric window
-	  if (N==0 && (!Markov || bothdir) ) for ( ; i<=k2; ++i) if ( dbuffer[dz+i]<1 || dbuffer[dz+i]>4 ) { N=1; break; }
-	  if (N==0) {
-	    if (printPos) printf("%s\t%ld\t",id,pos+kmax+1);   // first base has number 1
-	    if (Markov) {
-	      count = MarkovProbs(bwt, dbuffer+dz, kmin, kmax, p, alpha);
-	      if (bothdir) {
-		// Last base of reverse: x=bufsize2-1-dz;
-		// First base is x-2*kmax = bufsize2-1-dz-k2
-		count += MarkovProbs(bwt, rbuffer+bufsize2-1-dz-k2, kmin, kmax, p2, alpha);
-		for (i=1; i<=4; ++i) p[i] = 0.5*(p[i]+p2[(int)(bwt->astruct->compTrans[i])]);
-		if (printPos) printSeqRaw(stdout, dbuffer, l, bwt->astruct->a, dz, k2+1);
-	      }
-	      else if (printPos) printSeqRaw(stdout, dbuffer, l, bwt->astruct->a, dz, kmax+1);
-	    }
-	    else {
-	      count = CentralProbs(bwt, dbuffer+dz, kmin, kmax, p, alpha);
-	      if (printPos) printSeqRaw(stdout, dbuffer, l, bwt->astruct->a, dz, k2+1);
-	    }
-	    maxi=1;
-	    for (i=2; i<=4; ++i) if (p[maxi]<p[i]) maxi=i;
-	    iref = dbuffer[dz+kmax];
-	    // REF\tALT\tQUAL\tFILTER INFO
-	    if (printPos) {
-	      printf("\t%c\t%c\t%lf\t%s\tE=%lf;P",bwt->astruct->a[iref],bwt->astruct->a[maxi],
-		     p[iref],
-		     (maxi==iref?"PASS":"no"),
-		     entropy(p));
-	      for (i=1; i<=4; ++i) printf("%c%lf",(i==1?'=':','),p[i]);
-	      printf("\n");
-	    }
-	    if (iref == maxi) correct+=1;
-	    total += 1;
-	  } // if (N==0)
-	  */
+	  // Last base of reverse: x=bufsize2-1-dz;
+	  // First base is then x-2*kmax = bufsize2-dz-wsize
+	  seq_probabilities(dbuffer+dz, rbuffer+bufsize2-dz-cs->wsize, id, pos, cs);
 
 	  if (pos+bufsize<l) {
 	    k = FMindexCurrent(cs->bwt->f, &cur, k);
 	    dbuffer[dz+bufsize] = dbuffer[dz] = cs->bwt->astruct->compTrans[cur];
 	    rbuffer[bufsize2-1-dz] = rbuffer[bufsize-1-dz] = cur;
 	  }
-	  // End of inner loop
 	}     // for (pos...
       }       // if (l<0)
     }         // for (iseq
-    fprintf(stderr,"Total sites %d, Correct sites %d, Fraction correct %lf\n",total, correct,(double)correct/(double)total);
-  }           // if (genome)
+    fprintf(stderr,"Total sites %ld, Correct sites %ld, Fraction correct %lf\n",cs->total,
+	    cs->correct,(double)cs->correct/(double)cs->total);
+  }
 
 }

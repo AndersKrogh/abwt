@@ -28,7 +28,8 @@ VALUE double alpha|a 100.
 The pseudocount weight
 
 VALUE char* sequence|s NULL
-Sequence for which to calculate probabilities for position k
+File containing sequence(s) in fasta format for which to predict.
+If equal to \"stdin\", sequence is read from stdin.
 
 SWITCH int genome|g 0
 Compute probabilities for the entire genome in index and print for each
