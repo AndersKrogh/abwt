@@ -24,7 +24,7 @@ BACKUP = backup
 VPATH = $(SRC)
 
 
-EXEFILES = makeabwt readfmi searchbwt exactRepeats
+EXEFILES = makeabwt readfmi searchbwt exactRepeats predictDNA
 
 ALL: $(EXEFILES)
 

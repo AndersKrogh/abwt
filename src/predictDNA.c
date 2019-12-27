@@ -311,10 +311,7 @@ static void seq_probabilities (char *seq, char *rev, char *id, IndexType pos, co
 
 int main (int argc, char **argv) {
   FILE *fp;
-  int c;
-  double p[10];
   Sequence *seq;
-
   int i, iseq, dz;
   IndexType l, k, pos;
   const int bufsize=64, bufsize2 = 128;
@@ -344,6 +341,20 @@ int main (int argc, char **argv) {
   fclose(fp);
   fprintf(stderr,"BWT of length %ld has been read with %d sequences\n",
 	  cs->bwt->len,cs->bwt->s->nseq);
+
+  //  Check that things make sense for DNA (makeabwt -r -a DNA/w)
+  fprintf(stderr,"Alphabet in index file: %s\n",cs->bwt->astruct->a);
+  if ( strncmp(cs->bwt->astruct->a+1,"ACGT",4) )
+    fprintf(stderr,"WARNING: Program assumes ACGT for letter 2 to 5\n");
+
+  if ( 2&(cs->bwt->reverse) ) {   // Bit 1 is reverse, bit 2 is complement
+    fprintf(stderr,"Index contains the reverse complement (as it should)\n");
+  }
+  else {
+    fprintf(stderr,"Reverse complement flag (bit 2 must be set): %d\n",cs->bwt->reverse);
+    ERROR("Index must contain reverse complement (makeabwt -r)",1);
+  }
+
 
   cs->kmax=kmax;
   cs->kmin = kmin;
