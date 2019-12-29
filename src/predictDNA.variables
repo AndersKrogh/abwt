@@ -9,7 +9,35 @@ To be read by OptionsAndArguments
 HELPTEXT
 ---
 
-Index of reads/contigs/genomes must be built using makeabwt
+This program calculates the probabilities of the four bases at a given
+position in a sequence. The probabilities are calculated from the occurrence
+of the 4 bases in the same context in the genome.
+
+The central model uses a symmetric context of size k to each side.
+The Markov model uses the k previous bases. The biderectional Markov model
+averages the results of the Markov model on both strands.
+
+The models are interpolated by using the k model to construct pseudocounts
+for the k+1 model. The pseudo counts are alpha times the probabilities of
+the k model.
+
+The program reads an index containing the training sequences, e.g. the whole
+genome. It must include the reverse complement. It is built with
+  makeabwt -r -a DNA/w ...
+This index is used to estimate the model on the fly - the contexts
+are not saved.
+
+The program can take a fasta sequence as input (-s) on which to use the model
+estimated from the genome. It can also be run on the genome itself (-g -G) or
+a single chromosome (-i).
+
+Output is in VCF format with
+- ID equal to the sequence context,
+- reference is the actual base at the position
+- the alternative allele is the max-probability base.
+- Quality is the probability of the reference
+- Filter is \"PASS\" if ref=alt, and otherwise \"no\".
+- INFO contains the entropy and the four base probabilities (A, C, G, T)
 
 See options below
 ---
@@ -19,17 +47,20 @@ ARG char* indexfile NULL
 Name of file containing BWT/FMI index
 
 VALUE int kmax|k 3
-The k-mer size
+The context size. For the central model, the context is kmax to each side of
+the base in question. For the Markov model kmax is the model order.
 
 VALUE int kmin|m 2
-The minimum k for interpolation
+The minimum k for interpolation. The model is made iteratively from k=kmin
+to k=kmax, each time using the previous model as pseudo counts. The size of
+the pseudo counts are alpha*p(letter).
 
 VALUE double alpha|a 100.
-The pseudocount weight
+The pseudo count weight.
 
 VALUE char* sequence|s NULL
 File containing sequence(s) in fasta format for which to predict.
-If equal to \"stdin\", sequence is read from stdin.
+If equal to \"stdin\", sequences are read from stdin.
 
 SWITCH int genome|g 0
 Compute probabilities for the entire genome in index and print for each
@@ -40,7 +71,8 @@ As -g, but only print the final statistics (even if -g is also set).
 
 VALUE char* identifier|i NULL
 Restrict to the one sequence in index (e.g. chromosome) with this id
-(use with -g and -G). Has to macth fasta ID exactly.
+(use with -g and -G). Has to macth faThe k-mer size
+sta ID exactly.
 
 SWITCH int Markov|M 0
 Calculate Markov probabilities instead of central probs.

@@ -247,7 +247,7 @@ typedef struct {
 } containerStruct;
 
 static void printVCFheader(FILE *out) {
-  fprintf(out,"##fileformat=VCFv4.3\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER INFO\n");
+  fprintf(out,"##fileformat=VCFv4.3\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n");
 }
 
 static void printVCFline(FILE *out, char *id, IndexType position, char *seq, int seqlen,
