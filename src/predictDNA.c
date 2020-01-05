@@ -10,6 +10,7 @@ The abwt package is licensed under the GPLv3, see the file LICENSE.
 #include <ctype.h>
 #include <math.h>
 
+#include "version.h"
 #include "aklib.h"
 #include "common.h"
 #include "fmi.h"
@@ -331,7 +332,11 @@ int main (int argc, char **argv) {
   if (kmax<kmin || kmax>16) { fprintf(stderr, "kmax=%d ", kmax); ERROR("doesn't seem right",1); }
 
   if (bothdir && !Markov) ERROR("Option -bothdir/-b only works with -Markov/-M",1);
-  if (GenomeStats) { cs->printPos=0; genome=1; }
+
+  // DELETE THESE TWO LINES AND THE GenomeStats option
+  if (GenomeStats) { StatsOnly = genome = 1; }
+
+  if (StatsOnly) { cs->printPos=0; }
   else cs->printPos=1;
 
   // Open index file
@@ -405,6 +410,8 @@ int main (int argc, char **argv) {
       }
     }
     fclose(infile);
+    fprintf(stderr,"Total sites %ld, Correct sites %ld, Fraction correct %lf\n",cs->total,
+	    cs->correct,(double)cs->correct/(double)cs->total);
   }
 
   if (genome) {

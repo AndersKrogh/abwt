@@ -43,6 +43,9 @@ See options below
 ---
 END
 
+
+# NAME predictDNA
+
 ARG char* indexfile NULL
 Name of file containing BWT/FMI index
 
@@ -67,7 +70,11 @@ Compute probabilities for the entire genome in index and print for each
 position, where it can be calculated (no Ns in window).
 
 SWITCH int GenomeStats|G 0
+This option will be discontinued. Use -g -S instead
 As -g, but only print the final statistics (even if -g is also set).
+
+SWITCH int StatsOnly|S 0
+Only print the final statistics and not every position
 
 VALUE char* identifier|i NULL
 Restrict to the one sequence in index (e.g. chromosome) with this id
