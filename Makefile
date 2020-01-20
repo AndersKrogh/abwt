@@ -24,7 +24,7 @@ BACKUP = backup
 VPATH = $(SRC)
 
 
-EXEFILES = makeabwt readfmi searchbwt exactRepeats predictDNA
+EXEFILES = makeabwt readfmi searchbwt exactRepeats predictDNA editSequence
 
 ALL: $(EXEFILES)
 
@@ -42,6 +42,8 @@ searchbwt: searchbwt.o bwt.o suffixArray.o fmi.o interval.o
 
 predictDNA: predictDNA.o bwt.o suffixArray.o fmi.o interval.o
 
+editSequence: editSequence.o
+
 # o files
 
 makeabwt.o: makeabwt.c makeabwt_vars.inc common.h multikeyqsort.h fmi.h version.h
@@ -57,6 +59,8 @@ exactRepeats.o: exactRepeats.c exactRepeats_vars.inc bwt.h fmi.h common.h versio
 	$(CC) $(CFLAGS) -c $<
 
 predictDNA.o: predictDNA.c predictDNA_vars.inc bwt.h fmi.h common.h version.h
+
+editSequence.o: editSequence.c editSequence_vars.inc
 
 readLongFasta.o: readLongFasta.c readLongFasta.h common.h
 
@@ -88,6 +92,9 @@ exactRepeats_vars.inc: exactRepeats.variables
 	$(TOOLS)/OptionsAndArguments $< > $(SRC)/$@
 
 predictDNA_vars.inc: predictDNA.variables
+	$(TOOLS)/OptionsAndArguments $< > $(SRC)/$@
+
+editSequence_vars.inc: editSequence.variables
 	$(TOOLS)/OptionsAndArguments $< > $(SRC)/$@
 
 cleansrc:

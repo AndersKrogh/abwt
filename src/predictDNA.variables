@@ -78,8 +78,7 @@ Only print the final statistics and not every position
 
 VALUE char* identifier|i NULL
 Restrict to the one sequence in index (e.g. chromosome) with this id
-(use with -g and -G). Has to macth faThe k-mer size
-sta ID exactly.
+(use with -g and -G). Has to match the fasta ID exactly.
 
 SWITCH int Markov|M 0
 Calculate Markov probabilities instead of central probs.

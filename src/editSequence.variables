@@ -1,0 +1,85 @@
+# This file is part of the abwt package.
+# Copyright 2016-2020 by Anders Krogh.
+# The abwt package is licensed under the GPLv3, see the file LICENSE.
+
+
+To be read by OptionsAndArguments
+
+HELPTEXT
+---
+
+Read a fasta file on stdin, apply operations and output fasta on stdout.
+
+Operations can be simple: revcomp, upcase, lowcase. Or based on intervals
+(e.g. bed format): Extract intervals, change case in intervals, replace
+intervals with a given letter or sequence.
+
+Note that bed file must be sorted and sequences in same order as in fasta
+file.
+
+See options below
+---
+END
+
+
+
+ARG char* intervalfile|i NULL
+Name of file containing sequence intervals. Must have id, begin, end
+separated by one space char on each line (like 3 first columns of bed files).
+Must be sorted.
+
+SWITCH int revcomp|r 0
+Reverse complement sequence. Does not work with intervals.
+
+SWITCH int both 0
+Output both strands. Does not work with intervals.
+
+SWITCH int upper|u 0
+Change regions to upper case
+
+SWITCH int lower|l 0
+Change regions to lower case
+
+SWITCH int translate|t 0
+Translate DNA in 3 reading frames. At each position the nucleotide
+is replaced by the amino acid corresponding to the codon ending with
+that nuclotide. First two nuclotides are replaced by XX. Stop codons are
+shown with $. Standard translation table used.
+With -r, seqs are first reverse complented. Does not work with intervals.
+
+VALUE char* Alphabet|a DNA/w
+Alphabet used. Instead of alphabet you can specify protein, DNA, IUPAC, or
+RNA, in which case the alphabet is ACDEFGHIKLMNPQRSTVWYX, ACGTN,
+ACGTNRYSWKMBDHVN, or ACGUN.
+You can give qualifiers: /wildcard, /casesens, /variants to add
+wildcard character (N or X), make a case sensitive index and add '|'
+for variant encoding, repectively. These can be abbreviated.
+Example: DNA/w will give the alphabet ACGTN
+
+SWITCH int split|s 0
+Print intervals as separate sequences.
+
+VALUE char* newChar|c NULL
+Replace characters in regions to this. E.g. '-c N' will change all
+characters to N in each of the intervals given. (With -r, in the intervening
+regions instead.)
+
+SWITCH int between|b 0
+Edit/print regions between intervals instead of in intervals
+
+SWITCH int skip|x 0
+Skip sequences not mentioned in bed input. Normally they are treated as
+one long intervening sequence (so -l -r will lower case the entire seq).
+
+VALUE char* edit|e NULL
+Intervals are simply deleted and replaced by string. E.g. '-s NN' will
+replace all intervals with the two character string 'NN'. Note the string
+must consist of alphabet characters unless the string is:
+ 'delete'  - the intervals are deleted in the sequence.
+With -r the same happens for intervening sequences instead.
+This option is over-written by -c
+
+VALUE int linelen 70
+Line length for fasta output
+
+
