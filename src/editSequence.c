@@ -15,12 +15,17 @@ The abwt package is licensed under the GPLv3, see the file LICENSE.
 #include "OptionsAndArguments.h"
 
 
+/*
+  This follows the bed convention that numbering starts from 0 and does
+  the end base is not included. So start=0 and end=1 means the first base
+  of the sequence only.
+*/
+
 /**LOCALSTRUCT seqFeature char *id,->start,->end
   char *id; !!= strdup(id) !!- FREE
   long start;
   long end;
-  long len; !!= 1+ ->end - ->start
-ALLOC END ->start -= 1;
+  long len; !!= SELF->end - ->start
 **/
 //BEGIN AUTO GENERATED
 
@@ -36,8 +41,7 @@ seqFeature *alloc_seqFeature(char *id,long start,long end) {
   r->id = strdup(id);
   r->start = start;
   r->end = end;
-  r->len = 1+ r->end - r->start;
-  r->start -= 1;
+  r->len = r->end - r->start;
   return r;
 }
 void free_seqFeature(seqFeature *r) {
@@ -49,8 +53,11 @@ void free_seqFeature(seqFeature *r) {
 
 
 
-// Read bed entry. Ignores everything but first 3 columns
-seqFeature *read_bed(FILE *fp) {
+/* Read bed-like entry. Ignores everything but first 3 columns
+   You have to specify number of first base
+   Bed format starts at 0
+ */
+seqFeature *read_bed_like(FILE *fp, int firstbasenumber, int includeLast) {
   const int linelen = 1<<16;
   char line[linelen], *id;
   long start, end;
@@ -60,8 +67,8 @@ seqFeature *read_bed(FILE *fp) {
     if (line[0]!='#' && !isspace(line[0])) {
       strlist = splitString(line,'\t',0);
       id = (char*)popList(strlist);
-      start = atol((char*)popList(strlist));
-      end = atol((char*)popList(strlist));
+      start = atol((char*)popList(strlist))-firstbasenumber;
+      end = atol((char*)popList(strlist))-firstbasenumber+includeLast;
       freeList(strlist);
       return alloc_seqFeature(line,start,end);
     }
@@ -212,7 +219,7 @@ int main(int argc, char **argv) {
   }
 
   while ( intervalfile ) {
-    f = read_bed(fp);
+    f = read_bed_like(fp,normalIntervals,normalIntervals);
 
     while ( !seq || !f || strcmp(seq->id,f->id) ) {
       // If there already is a sequence with different id, finish it

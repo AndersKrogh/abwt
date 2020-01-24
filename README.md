@@ -1,8 +1,8 @@
 # abwt
 
 This reposetory contains C programs to construct a Burrows-Wheler index
-and FM index of a database of bilogical sequences. Any (small)
-alphabet can be used.
+and FM index of a database of biological sequences. Any (small)
+alphabet can be used. Includes a couple of simple programs using it.
 
 
 ### License
