@@ -60,7 +60,7 @@ SWITCH int split|s 0
 Print intervals as separate sequences.
 
 VALUE char* newChar|c NULL
-Replace characters in regions to this. E.g. '-c N' will change all
+Replace characters in regions with this. E.g. '-c N' will change all
 characters to N in each of the intervals given. (With -r, in the intervening
 regions instead.)
 

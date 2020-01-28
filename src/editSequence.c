@@ -96,6 +96,10 @@ static int continue_printFasta(FILE *file, Sequence *seq, char *alphabet, int li
   int n=0;
   char *s = seq->s;
 
+  if (seq->len<=0) return line_pos;
+
+  // fprintf(stderr,"CPRINT: %s l=%ld n=%d linepos=%d\n",seq->id,seq->len,n,line_pos);
+
   //printf("*%d*",line_pos);
 
   if (linelen<=0) linelen=70;
@@ -108,7 +112,9 @@ static int continue_printFasta(FILE *file, Sequence *seq, char *alphabet, int li
   }
 
   while (n<seq->len) {
-    if ((n+line_pos)>0 && (n+line_pos)%linelen==0) fputc('\n',file);
+    if ((n+line_pos)>0 && (n+line_pos)%linelen==0) {
+      fputc('\n',file);
+    }
     fputc(alphabet[(int)s[n++]],file);
   }
 
@@ -220,6 +226,7 @@ int main(int argc, char **argv) {
 
   while ( intervalfile ) {
     f = read_bed_like(fp,normalIntervals,normalIntervals);
+    // if (f) fprintf(stderr,"%s %ld %ld\n",f->id, f->start, f->end);
 
     while ( !seq || !f || strcmp(seq->id,f->id) ) {
       // If there already is a sequence with different id, finish it
@@ -251,6 +258,7 @@ int main(int argc, char **argv) {
       if (!eof) seq = readFasta(stdin,astruct,1024,0,&eof);
       if (!seq) break;
 
+      // fprintf(stderr,"Read sequence %s of length %ld\n",seq->id, seq->len);
       // Prepare next round
       last_end=0;
       linepos=0;
