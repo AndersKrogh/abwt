@@ -159,19 +159,19 @@ int main(int argc, char **argv) {
   if (both) forwardstrand = revcomp = 1;
 
   if (newChar) {
-    if (between) for (k=0; k<astruct->len; ++k) balph[k] = *newChar;
+    if (invert) for (k=0; k<astruct->len; ++k) balph[k] = *newChar;
     else for (k=0; k<astruct->len; ++k) ialph[k] = *newChar;
   }
   else if (edit) {
     if (strcmp(edit, "delete")) replace_seq = make_Sequence(edit,NULL,astruct);
-    else replace_seq = alloc_Sequence();
+    else replace_seq = alloc_Sequence(); // Dummy sequence with length 0 if delete
   }
   if (upper) {
-    if (between) for (k=0; k<astruct->len; ++k) balph[k] = toupper(balph[k]);
+    if (invert) for (k=0; k<astruct->len; ++k) balph[k] = toupper(balph[k]);
     else for (k=0; k<astruct->len; ++k) ialph[k] = toupper(ialph[k]);
   }
   if (lower) {
-    if (between) for (k=0; k<astruct->len; ++k) balph[k] = tolower(balph[k]);
+    if (invert) for (k=0; k<astruct->len; ++k) balph[k] = tolower(balph[k]);
     else for (k=0; k<astruct->len; ++k) ialph[k] = tolower(ialph[k]);
   }
 
@@ -182,7 +182,7 @@ int main(int argc, char **argv) {
     // Operations on complete input sequences
     if (newChar) ERROR("Option -newChar should not be used when no intervals are given.",1);
     if (split) fprintf(stderr,"WARNING: -split has no effect when no intervals are given.\n");
-    if (between) ERROR("Option -between should not be used when no intervals are given.",1);
+    if (invert) ERROR("Option -invert should not be used when no intervals are given.",1);
     if (skip) fprintf(stderr,"WARNING: -skip has no effect when no intervals are given.\n");
     if (edit) fprintf(stderr,"WARNING: -edit has no effect when no intervals are given.\n");
 
@@ -231,11 +231,11 @@ int main(int argc, char **argv) {
     while ( !seq || !f || strcmp(seq->id,f->id) ) {
       // If there already is a sequence with different id, finish it
       if ( seq ) {
-	if ( (!split || between ) && ( last_end>0 || !skip) ) {
+	if ( (!split || invert ) && ( last_end>0 || !skip) ) {
 	  // Print intervening of last seq
 	  newseq->s = seq->s + last_end;
 	  newseq->len = seq->len - last_end;
-	  if ( newseq->len>0 && edit && between ) {
+	  if ( newseq->len>0 && edit && invert ) {
 	    if (replace_seq) {
 	      newseq->s = replace_seq->s;
 	      newseq->len = replace_seq->len;
@@ -248,7 +248,10 @@ int main(int argc, char **argv) {
 	      printFasta(stdout,newseq,balph,linelen);
 	    }
 	  }
-	  else linepos = continue_printFasta(stdout,newseq,balph,linelen,linepos,1);
+	  else {
+	    if (newseq->len==0 && last_end<seq->len) printf("\n"); // Happens if "delete" and end of sequence
+	    else linepos = continue_printFasta(stdout,newseq,balph,linelen,linepos,1);
+	  }
 	}
 	free_Sequence(seq);
 	seq=NULL;
@@ -267,10 +270,10 @@ int main(int argc, char **argv) {
 
     if (!f || !seq) break;
 
-    if ( !split || between ) {
+    if ( !split || invert ) {
       newseq->s = seq->s + last_end;
       newseq->len = f->start - last_end;
-      if ( edit && between ) {
+      if ( edit && invert ) {
 	if (replace_seq) {
 	  newseq->s = replace_seq->s;
 	  newseq->len = replace_seq->len;
@@ -285,20 +288,23 @@ int main(int argc, char **argv) {
       }
       else linepos = continue_printFasta(stdout,newseq,balph,linelen,linepos,0);
     }
-    if ( !split || !between ) {
+    if ( !split || !invert ) {
       newseq->s = seq->s + f->start;
       newseq->len = f->len;
-      if ( edit && !between ) {
+      if ( edit && !invert ) {
 	newseq->s = replace_seq->s;
 	newseq->len = replace_seq->len;
       }
       if (split) {
 	sprintf(newseq->id,"%s_%ld-%ld",seq->id,f->start+1,f->end);
 	linepos=0;
-	k=1;
       }
+
+      if (split || f->end>=seq->len) k=1;
       else k=0;
-      if (newseq->len>0) linepos = continue_printFasta(stdout,newseq,ialph,linelen,linepos,k);      
+
+      if (k && newseq->len==0) printf("\n"); // Happens if "delete" and end of sequence
+      else linepos = continue_printFasta(stdout,newseq,ialph,linelen,linepos,k);      
     }
 
     last_end = f->end;
