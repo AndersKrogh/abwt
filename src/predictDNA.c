@@ -1,8 +1,3 @@
-/*
-This file is part of the abwt package.
-Copyright 2016-2020 by Anders Krogh.
-The abwt package is licensed under the GPLv3, see the file LICENSE.
-*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -238,13 +233,14 @@ typedef struct {
   int kmax;
   int kmin;
   int wsize;
-  double alpha;
   int Markov;
   int bothdir;
   int printPos;
   int subtract1;
+  int printProgress;
   IndexType correct;
   IndexType total;
+  double alpha;
 } containerStruct;
 
 static void printVCFheader(FILE *out) {
@@ -268,12 +264,16 @@ static void printVCFline(FILE *out, char *id, IndexType position, char *seq, int
 /*
   Estimate probabilities and print for sequence seq.
   The sequence must have 2*kmax letters (or kmax+1 if Markov and NOT bidirectional)
+  pos is the (genomic) start position of the sequence, so the prob is calculated
+  for base pos+kmax+1
 */
-static void seq_probabilities (char *seq, char *rev, char *id, IndexType pos, containerStruct *c) {
+static double seq_probabilities (char *seq, char *rev, char *id, IndexType pos, containerStruct *c) {
   int N, i, count, maxi, iref;
   int printlen=c->wsize;
-  double p[6], p2[6];
+  double p[6], p2[6], pref=-10.;
   char revcomp[256];
+
+  if (c->printProgress && pos>0 && pos%c->printProgress==0) fprintf(stderr,"Analyzed %4.2lf Mb\n",(pos/1000000.));
 
   // Make revcomp
   if (!rev && c->bothdir) {
@@ -302,11 +302,117 @@ static void seq_probabilities (char *seq, char *rev, char *id, IndexType pos, co
     if (iref == maxi) c->correct+=1;
     c->total += 1;
 
+    pref = p[iref];
+
     if (c->printPos) printVCFline(stdout, id, pos+c->kmax+1, seq, printlen,
 		 iref, maxi, c->bwt->astruct->a, p);
   }
+  return pref;
 }
 
+/*
+  w is word and l is word length
+  wprob is a buffer to keep track of probs. It contains
+      l-1:  p(w[l-1])
+      l-2:  p(w[l-1])*p(w[l-2])
+      l-3:  p(w[l-1])*p(w[l-2])*p(w[l-3])
+       :
+      0:    p(w[l-1])*p(w[l-2])...p(w[0])
+  so wprob[0] is the prob of the current word
+
+  Below we are using an "alphabet" in which the first char is
+  =1 (integer 1, not '1'), the second =2, etc.
+  This is because the kmer functions assumes that letters are numbered 0..alen-1,
+  but in the BWT letter 0 is the stop character =0.
+*/
+
+/**LOCALSTRUCT wordStruct ->l, ->asize
+  int l;
+  int asize;
+  IndexType wtotal; !!=0
+  int N;         !!=pow(->asize,->l)+0.1
+  double *wprob; !!=CALLOC(->l) !!-FREE
+  int *count;    !!=CALLOC(->N) !!-FREE
+  double *p;     !!=CALLOC(->N) !!-FREE
+  double *logp;  !!=CALLOC(->N) !!-FREE
+  kmerSpecs *wordSpecs; !!-free_kmerSpecs(->wordSpecs)
+ALLOC END int i;
+ALLOC END for (i=0; i<= ->l; ++i) ->wprob[i]=-10.;
+ALLOC END char alph[5];
+ALLOC END for (i=0; i<4; ++i) alph[i]=i+1;
+ALLOC END SELF->wordSpecs=alloc_kmerSpecs(4,->l,alph);
+**/
+//BEGIN AUTO GENERATED
+
+typedef struct wordStruct {
+  int l;
+  int asize;
+  IndexType wtotal;
+  int N;
+  double *wprob;
+  int *count;
+  double *p;
+  double *logp;
+  kmerSpecs *wordSpecs;
+} wordStruct;
+wordStruct *alloc_wordStruct(int l, int asize) {
+  wordStruct *r;
+  r = (wordStruct *)malloc(sizeof(wordStruct));
+  r->l = l;
+  r->asize = asize;
+  r->wtotal = 0;
+  r->N = pow(r->asize,r->l)+0.1;
+  r->wprob = (double*)calloc(r->l,sizeof(double));
+  r->count = (int*)calloc(r->N,sizeof(int));
+  r->p = (double*)calloc(r->N,sizeof(double));
+  r->logp = (double*)calloc(r->N,sizeof(double));
+  r->wordSpecs = NULL;
+  int i;
+  for (i=0; i<= r->l; ++i) r->wprob[i]=-10.;
+  char alph[5];
+  for (i=0; i<4; ++i) alph[i]=i+1;
+  r->wordSpecs=alloc_kmerSpecs(4,r->l,alph);
+  return r;
+}
+void free_wordStruct(wordStruct *r) {
+  if (!r) return;
+  if (r->wprob) free(r->wprob);
+  if (r->count) free(r->count);
+  if (r->p) free(r->p);
+  if (r->logp) free(r->logp);
+  if (r->wordSpecs) free_kmerSpecs(r->wordSpecs);
+  free(r);
+}
+//END AUTO GENERATED
+
+
+
+
+static void wordProbs(double p, char *w, wordStruct *ws) {
+  int i, nw;
+  // Fill wprob buffer
+  if (p<0) for (i=0; i<ws->l; ++i) ws->wprob[i] = -10.;
+  else {
+    for (i=0; i<ws->l-1; ++i) {
+      if (ws->wprob[i+1]>=0.) ws->wprob[i] = p*ws->wprob[i+1];
+      else ws->wprob[i] = -10.;
+    }
+    ws->wprob[i] = p;
+  }
+  if (ws->wprob[0]>=0.) {
+    nw = kmerNumber(ws->wordSpecs,w);
+    ws->p[nw] += ws->wprob[0];
+    ws->logp[nw] += log2(ws->wprob[0]);
+    ws->count[nw] += 1;
+    ws->wtotal+=1;
+
+    /* TESTING
+    char pw[32],*pa="*ACGT";
+    for (i=0; i<ws->l; ++i) fprintf(stdout,"%c",pa[(int)w[i]]);
+    fprintf(stdout,"%d %d (%ld) %lf\n",number2kmer(ws->wordSpecs, nw, pw),nw,ws->count[nw],ws->wtotal,ws->p[nw]);
+    */
+  }
+}
 
 
 
@@ -318,6 +424,8 @@ int main (int argc, char **argv) {
   const int bufsize=64, bufsize2 = 128;
   char dbuffer[bufsize2], rbuffer[bufsize2], *id;
   uchar cur;
+  double p;
+  wordStruct *ws=0;
 
   containerStruct *cs = (containerStruct*)malloc(sizeof(containerStruct));
   
@@ -361,7 +469,7 @@ int main (int argc, char **argv) {
   }
 
 
-  cs->kmax=kmax;
+  cs->kmax = kmax;
   cs->kmin = kmin;
   cs->alpha = alpha;
   cs->Markov = Markov;
@@ -369,26 +477,17 @@ int main (int argc, char **argv) {
   cs->correct = 0;
   cs->total = 0;
   cs->subtract1 = 1;
+  cs->printProgress = 0;
+  if (pp>0 && pp<=10) cs->printProgress = pow(10,pp)+0.5;
 
   //total window width
   if ( !cs->Markov || cs->bothdir ) cs->wsize = 2*cs->kmax+1;
   else cs->wsize=cs->kmax+1;
 
-  /*
-  if (sequence) {
-    if (strlen(sequence)<kmax+1) ERROR("Sequence too short",1);
-    c = sequence[kmax];
-    sequence[kmax] = '\0';
-    printf("Sequence %s* ref=%c\n", sequence, c);
-    sequence[kmax] = c;
-    seq = make_Sequence(sequence,strdup("testseq"), cs->bwt->astruct);
-    if (subtractRef < 0) cs->subtract1 = 0;
-    if (Markov) MarkovProbs(cs->bwt, seq->s, kmin, kmax, p, alpha, cs->subtract1);
-    else CentralProbs(cs->bwt, s->s, kmin, kmax, p, alpha, cs->subtract1);
-    for (c=1; c<=4; ++c) printf("%lf ",p[c]);
-    printf("<- probs for A,C,G and T\n");
+  if (wordAnalysis) {
+    ws = alloc_wordStruct(wordAnalysis, 4);
+    cs->printPos=0;
   }
-  */
 
   if (sequence) {
     char *s;
@@ -397,7 +496,7 @@ int main (int argc, char **argv) {
     if ( strncmp(sequence,"stdin",5) ) infile=open_file_read(sequence,NULL,"Problem opening sequence file");
     i = ReadSequenceFileHeader(infile,'>');
     if (subtractRef < 0) cs->subtract1 = 0;
-    printVCFheader(stdout);
+    if (cs->printPos) printVCFheader(stdout);
     while (!eof) {
       seq = readFasta(infile,cs->bwt->astruct,1024,0,&eof);
       if (!seq) break;
@@ -405,7 +504,8 @@ int main (int argc, char **argv) {
       fprintf(stderr,"Analyzing sequence \"%s\" of length %ld\n",seq->id, l);
       s = seq->s;
       for (pos=0; pos<=l-cs->wsize; ++pos) {
-	seq_probabilities(s, NULL, seq->id, pos, cs);
+	p = seq_probabilities(s, NULL, seq->id, pos, cs);
+	if (wordAnalysis && p>=0) wordProbs(p, s+cs->kmax-ws->l+1, ws);
 	++s;
       }
     }
@@ -420,7 +520,7 @@ int main (int argc, char **argv) {
     // unless it is set to 0 by user.
     if (subtractRef == 0) cs->subtract1 = 0;
 
-    printVCFheader(stdout);
+    if (cs->printPos) printVCFheader(stdout);
     for (iseq=0; iseq<cs->bwt->s->nseq; ++iseq) {
       l = cs->bwt->s->seqlengths[iseq];
       if (l>=0) i=1;
@@ -447,7 +547,9 @@ int main (int argc, char **argv) {
 	  // call function with dbuffer+dz
 	  // Last base of reverse: x=bufsize2-1-dz;
 	  // First base is then x-2*kmax = bufsize2-dz-wsize
-	  seq_probabilities(dbuffer+dz, rbuffer+bufsize2-dz-cs->wsize, id, pos, cs);
+	  p = seq_probabilities(dbuffer+dz, rbuffer+bufsize2-dz-cs->wsize, id, pos, cs);
+
+	  if (wordAnalysis && p>=0) wordProbs(p, dbuffer+dz+cs->kmax-ws->l+1, ws);
 
 	  if (pos+bufsize<l) {
 	    k = FMindexCurrent(cs->bwt->f, &cur, k);
@@ -459,6 +561,21 @@ int main (int argc, char **argv) {
     }         // for (iseq
     fprintf(stderr,"Total sites %ld, Correct sites %ld, Fraction correct %lf\n",cs->total,
 	    cs->correct,(double)cs->correct/(double)cs->total);
+  } // if (genome)
+
+  if (wordAnalysis) {
+    char w[32],*pa="*ACGT";
+    int iw;
+    printf("# Total number of words: %ld\n",ws->wtotal);
+    printf("# num\tword\tcount\tProb\tlogP\n");
+    for (iw=0; iw<ws->N; ++iw) {
+      printf("%d\t",iw);
+      // Translate number to the actual k-mer in the funny alphabet 1, 2, 3, 4
+      number2kmer(ws->wordSpecs, iw, w);
+      for (i=0; i<ws->l; ++i) printf("%c",pa[(int)w[i]]);
+      printf("\t%d\t%lf\t%lf\n",ws->count[iw],ws->p[iw]/ws->count[iw],ws->logp[iw]/ws->count[iw]);
+    }
+    free_wordStruct(ws);
   }
 
 }

@@ -76,6 +76,9 @@ As -g, but only print the final statistics (even if -g is also set).
 SWITCH int StatsOnly|S 0
 Only print the final statistics and not every position
 
+VALUE int wordAnalysis|w 0
+Does word analysis with the size given here
+
 VALUE char* identifier|i NULL
 Restrict to the one sequence in index (e.g. chromosome) with this id
 (use with -g and -G). Has to match the fasta ID exactly.
@@ -90,3 +93,7 @@ VALUE int subtractRef|r -1
 Subtract 1 for the reference base. Set to zero to suppress and positive to
 enforce. If not set or if value is negative, the default is used: on when
 used on a seqeuence in the index (-i -g -G), and otherise 0.
+
+VALUE int pp 0
+Print progress for every 10^pp bases. E.g. \"-pp 6\" means that progress is
+printed for each magabase. <=0 turns it off.
