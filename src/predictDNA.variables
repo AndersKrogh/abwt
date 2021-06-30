@@ -22,13 +22,13 @@ for the k+1 model. The pseudo counts are alpha times the probabilities of
 the k model.
 
 The program reads an index containing the training sequences, e.g. the whole
-genome. It must include the reverse complement. It is built with
+genome. It is built with
   makeabwt -r -a DNA/w ...
-This index is used to estimate the model on the fly - the contexts
-are not saved.
+It must include the reverse complement (the -r option above). This index is
+used to estimate the model on the fly - the contexts are not saved.
 
 The program can take a fasta sequence as input (-s) on which to use the model
-estimated from the genome. It can also be run on the genome itself (-g -G) or
+estimated from the genome. It can also be run on the genome itself (-g) or
 a single chromosome (-i).
 
 Output is in VCF format with
@@ -38,6 +38,13 @@ Output is in VCF format with
 - Quality is the probability of the reference
 - Filter is \"PASS\" if ref=alt, and otherwise \"no\".
 - INFO contains the entropy and the four base probabilities (A, C, G, T)
+
+When calculating the probabilities at a given position in a genome, the
+base at that position is not counted by default. This corresponds to
+\"leave-one-out\" cross-validation - probabilities at that position are
+calculated from all the other postions with the same context. This can
+be turned off, if probabilities are calculated for another sequence.
+See option -subtractRef (-r)
 
 See options below
 ---
@@ -77,11 +84,11 @@ SWITCH int StatsOnly|S 0
 Only print the final statistics and not every position
 
 VALUE int wordAnalysis|w 0
-Does word analysis with the size given here
+Does word analysis with the size given here. Experimental.
 
 VALUE char* identifier|i NULL
 Restrict to the one sequence in index (e.g. chromosome) with this id
-(use with -g and -G). Has to match the fasta ID exactly.
+(use with -g). Has to match the fasta ID exactly.
 
 SWITCH int Markov|M 0
 Calculate Markov probabilities instead of central probs.
@@ -92,7 +99,7 @@ Bidirectional model. Calculate Markov probabilities in both directions.
 VALUE int subtractRef|r -1
 Subtract 1 for the reference base. Set to zero to suppress and positive to
 enforce. If not set or if value is negative, the default is used: on when
-used on a seqeuence in the index (-i -g -G), and otherise 0.
+used on a seqeuence in the index (-i -g), and otherise 0.
 
 VALUE int pp 0
 Print progress for every 10^pp bases. E.g. \"-pp 6\" means that progress is

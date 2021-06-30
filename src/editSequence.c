@@ -16,9 +16,9 @@ The abwt package is licensed under the GPLv3, see the file LICENSE.
 
 
 /*
-  This follows the bed convention that numbering starts from 0 and does
-  the end base is not included. So start=0 and end=1 means the first base
-  of the sequence only.
+  This follows the bed convention that numbering starts from 0 and does not
+  include the end base is not included. So start=0 and end=1 means the first
+  base of the sequence only.
 */
 
 /**LOCALSTRUCT seqFeature char *id,->start,->end

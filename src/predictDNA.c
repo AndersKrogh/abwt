@@ -1,3 +1,9 @@
+/*
+This file is part of the abwt package.
+Copyright 2016-2020 by Anders Krogh.
+The abwt package is licensed under the GPLv3, see the file LICENSE.
+*/
+
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,15 +40,28 @@ static inline void interval_reverse(interval *si, char *compTrans) {
   if (compTrans) si->c = compTrans[si->c];
 }
 
+/* The rsi must be available */
+static inline void interval_copy_reverse(interval *si, char *compTrans, interval *rsi) {
+  rsi->i[0]=si->r;
+  rsi->i[1]=si->r+interval_width(si);
+  rsi->r=si->i[0];
+  if (compTrans) rsi->c = compTrans[si->c];
+  else rsi->c = si->c;
+}
+
 
 
 // Clean up and keep only the relevant SI
-static inline interval *child_interval(interval *si, int refbase, int alen) {
-  si->next = si->kids[refbase];
+// Also free parent if free_parent is set
+// If parent is not freed, child->next points to parent
+static inline interval *child_interval(interval *si, int refbase, int alen, uchar free_parent) {
+  interval *child = si->kids[refbase];
   si->kids[refbase]=NULL;
   // Free unused kids
   interval_free_kids(si, alen);
-  return free_interval(si);  // free_interval returns next;
+  if (free_parent) free_interval(si);
+  else child->next = si;
+  return child;
 }
 
 
@@ -79,13 +98,165 @@ static inline void count2probs_nucleotides(int *count, int refbase, double *p) {
   if ( refbase && count[refbase]<=0 ) ERROR("count2probs: Reference base has 0 prob",1);
   if ( count[0]>0 ) {
     // Subtract 1 for the reference base
-    if (refbase) count[refbase] -= 1;
-    // Calc probs
-    norm = 1.0/(p[0]+count[0]-1);
+    if (refbase) {
+      count[refbase] -= 1;
+      count[0]-=1;
+    }
+    // Calc probs (fixed Nov 2020)
+    norm = 1.0/(p[0]+count[0]);
+    // norm = 1.0/(p[0]+count[0]-1);
     for (c=1; c<=4; ++c) p[c] = (p[0]*p[c]+count[c])*norm;
   }
 }
 
+
+
+/* Extend an interval backward with first_char
+   Assumes that si->r has been updated
+ */
+static interval *extend_backward(BWT *bwt, interval *si, int first_char, uchar free_parent) {
+  // Backward children
+  UpdateInterval(bwt->f, si);
+  // all children are needed to calc reverse interval
+  interval_update_reverse(si, bwt->astruct->compTrans, bwt->astruct->len);
+  // Child_interval frees all other children (and parent if free_parent!=0)
+  return child_interval(si, first_char, bwt->astruct->len,free_parent);
+}
+
+
+/* Extend an interval forward with last_char
+   Assumes that si->r has been updated
+ */
+static interval *extend_forward(BWT *bwt, interval *si, int last_char, uchar free_parent) {
+  interval rsi, *new;
+  // Reverse the parent interval
+  interval_copy_reverse(si, bwt->astruct->compTrans, &rsi);
+  if (free_parent) free_interval(si);
+  new = extend_backward(bwt, &rsi, bwt->astruct->compTrans[last_char], 0);
+  // Reverse to get back to original strand
+  if (new) interval_reverse(new,bwt->astruct->compTrans);
+  return new;
+}
+
+
+
+/*
+  Take an array of si's (si->next) and extends with letter c
+  Assumes that the intervals are ordered from largest to smaller, so if
+  an interval has size 0, the following will also be 0.
+  returns pointer to interval with depth==k
+ */
+
+/*
+UNDER DEVELOPMENT
+static interval stepAhead(BWT *bwt, interval *si, int c, int k) {
+  interval *ret=NULL;
+  while (si) {
+    if ( !UpdateSI(bwt->f, c, si->i, NULL) ) break;  // si is unchanged if there is a break
+    si->c = c;
+    si->n += 1;
+    if (si->n==k) ret=si;
+    si = si->next;
+  }
+  while (si) {
+    // Making interval zero length
+    si->i[1]=si->i[0];
+    si->c = c;
+    si->n += 1;
+    if (si->n==k) ret=si;
+    si = si->next;
+  }
+  return ret;
+}
+
+
+static int MarkovSegment(BWT *bwt, char *str, int kmin, int kmax, double *p, double alpha, int subtract1) {
+  int i, k, c;
+  int alen = bwt->astruct->len;
+  interval *si_base, *si = alloc_interval(0, bwt->f->bwtlen, 0);
+  IndexType **intervals;
+  double x[6];
+  char ref;
+
+  intervals = (IndexType **)malloc((kmax+1)*sizeof(IndexType*));
+  intervals[0] = (IndexType *)malloc(3*(kmax+1)*sizeof(IndexType));
+  for (k=1; k<kmax; ++k) intervals[k] = intervals[0] +3*k;
+  
+  // Calc all intervals prior to kmax and store in the intervals array
+  si = alloc_interval(0, bwt->f->bwtlen, 0)
+  for (k=0; k<=kmax; ++k) {
+    i = kmax-k;
+    // Backward SIs for sequence x_{kmax-k},...,x_{kmax-1}
+    if (k>0 && si) si = extend_backward(bwt, si, str[i], 1);
+    if ( si == NULL ) {
+      intervals[i][0] = intervals[i][1] = intervals[i][2] = 0;
+    }
+    else {
+      intervals[i][0] = si->i[0];
+      intervals[i][1] = si->r;
+      intervals[i][2] = interval_width(si);
+    }
+  }
+
+  // Allocate intervals for next analysis
+  if (!si) si = alloc_interval(0, bwt->f->bwtlen, 0)
+  base_si = si;
+  for (i=1; i<kmax; ++i) {
+    si->next = alloc_interval(0, bwt->f->bwtlen, 0);
+    si = si->next;
+  }
+  si = base_si;
+  // Set ->ptr to point backward in linked list
+  while (si->next) { si->next->ptr = si; si = si->next; }
+
+  // For each letter extend intervals forward and and calc probs
+  x[0] = 0;
+  for (c=1; c<=4; ++c) {
+    // Init intervals
+    si=base_si;
+    for (i=0; i<kmax; ++i) {
+      // Set interval
+      si->i[0]=intervals[i][1]; si->i[1]=intervals[i][1]+intervals[i][2];
+      // Set "depth" of interval
+      si->n = kmax-i;
+      si=si->next;
+    }
+    x[c] = 1.;
+    double zeroORone, pp;
+    if (ref == c) zeroORone = 1;
+    else zeroORone = 0;
+    for (i=0; i<=kmax; ++i) {
+      // FIX: if we are close to the end of the window, there is no need to forward interval
+      // Step one base forward
+      if (i==0) si = stepAhead(bwt, base_si, bwt->astruct->compTrans[c],kmin-1);
+      else si = stepAhead(bwt, si, bwt->astruct->compTrans[str[kmax+i]],kmin-1);
+      // Calc prob with context
+      pp = 0;
+      while (si->next) {
+	pp = (p[0]*pp + (length(si->next)-zeroORone))/(length(si)-zeroORone+p[0]);
+	si=si->next;
+      }
+      // Markov probability
+      x[c] *= pp;
+
+      // Permute
+      base_si->ptr = si; si->next = base_si; base_si = si; // Move last si first
+      si->i[0]=0; si->i[1]=bwt->f->bwtlen; si->n=0;        // Set initial (blank) interval
+      si->ptr->next = NULL;  // new last si should have next=0
+    }
+    
+  }
+
+
+  free(intervals[0]);
+  free(intervals);
+
+  while (base_si) base_si = free_interval(base_si);
+
+  return count[0];
+
+}
+*/
 
 
 /*
@@ -113,19 +284,25 @@ static int MarkovProbs(BWT *bwt, char *str, int kmin, int kmax, double *p, doubl
 
   for (k=1; k<=kmax; ++k) {
     // Backward SIs for sequence x_{kmax-k},...,x_{kmax-1}
+    /*
     UpdateInterval(bwt->f, si);
     // Because we need the SIs for the revcomp, all 4 SIs are needed.
     // Here the SIs for the reverse complement is calculated for the kids
     interval_update_reverse(si, bwt->astruct->compTrans, alen);
     // Choosing the backward interval only for letter str[kmax-k]
-    si = child_interval(si, str[kmax-k],alen);
+    si = child_interval(si, str[kmax-k],alen,1);
+    */
+    si = extend_backward(bwt, si, str[kmax-k], 1);
     if ( si == NULL ) return 0;
 
     if (k>=kmin) {
       // Start interpolation
       // Make the reverse interval
+      interval_copy_reverse(si, NULL, rsi);
+      /*
       rsi->i[0]=si->r;
       rsi->i[1]=si->r + interval_width(si);
+      */
       // Update the reverse complement interval
       UpdateInterval(bwt->f, rsi);
       // We now have the SI for the 4 complement bases for k
@@ -134,9 +311,6 @@ static int MarkovProbs(BWT *bwt, char *str, int kmin, int kmax, double *p, doubl
       ref = str[kmax];
       if (!subtract1) ref=0;
       if (count[0]) count2probs_nucleotides(count, ref, p);
-
-      //for (c=1; c<=4; ++c) fprintf(stderr, "%d %lf ", count[c], p[c]);
-      //fprintf(stderr,"tot=%d k=%d\n",count[0],k);
 
       interval_free_kids(rsi,alen);
     }
@@ -148,10 +322,19 @@ static int MarkovProbs(BWT *bwt, char *str, int kmin, int kmax, double *p, doubl
 }
 
 
+/* Extend an interval both ways with characters first_char and last_char
+   Assumes that si->r has been updated
+ */
+static interval *extend_both_ways(BWT *bwt, interval *si, int first_char, int last_char) {
+  si = extend_backward(bwt, si, first_char, 1);
+  if (!si) return NULL;
+  si = extend_forward(bwt, si, last_char, 1);
+  return si;
+}
+
 
 /* Extend an interval both ways with characters first_char and last_char
-   Assumes that si->r has ben updated
- */
+   Assumes that si->r has been updated
 static interval *extend_both_ways(BWT *bwt, interval *si, int first_char, int last_char) {
 
   // Backward children
@@ -159,7 +342,7 @@ static interval *extend_both_ways(BWT *bwt, interval *si, int first_char, int la
   interval_update_reverse(si, bwt->astruct->compTrans, bwt->astruct->len);
 
   // Save only relevant child
-  si = child_interval(si, first_char, bwt->astruct->len);
+  si = child_interval(si, first_char, bwt->astruct->len,1);
   if (!si) return NULL;
 
   // Calculate the forward intervals
@@ -167,13 +350,15 @@ static interval *extend_both_ways(BWT *bwt, interval *si, int first_char, int la
   UpdateInterval(bwt->f, si);
   interval_update_reverse(si, bwt->astruct->compTrans, bwt->astruct->len);
   // Save only relevant child (for revcomp of last_char)
-  si = child_interval(si, bwt->astruct->compTrans[last_char], bwt->astruct->len);
+  si = child_interval(si, bwt->astruct->compTrans[last_char], bwt->astruct->len,1);
   if (!si) return NULL;
 
   // Reverse to get back to original strand
   interval_reverse(si,bwt->astruct->compTrans);
   return si;
 }
+ */
+
 
 
 static int CentralProbs(BWT *bwt, char *str, int kmin, int kmax, double *p, double alpha, int subtract1) {
@@ -573,7 +758,8 @@ int main (int argc, char **argv) {
       // Translate number to the actual k-mer in the funny alphabet 1, 2, 3, 4
       number2kmer(ws->wordSpecs, iw, w);
       for (i=0; i<ws->l; ++i) printf("%c",pa[(int)w[i]]);
-      printf("\t%d\t%lf\t%lf\n",ws->count[iw],ws->p[iw]/ws->count[iw],ws->logp[iw]/ws->count[iw]);
+      if (ws->count[iw]) printf("\t%d\t%lg\t%lf\n",ws->count[iw],ws->p[iw]/ws->count[iw],ws->logp[iw]/ws->count[iw]);
+      else printf("\t%d\t%lg\t%lf\n",ws->count[iw],0.,0.);
     }
     free_wordStruct(ws);
   }

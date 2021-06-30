@@ -30,14 +30,6 @@ typedef struct {
 
 #define SI_IDENT 255
 
-static inline void interval_alloc_kids_array(interval *si, int asize) {
-  si->kids=(interval **)calloc(asize,sizeof(interval*));
-}
-
-static inline IndexType interval_width(interval *si) {
-  return si->i[1]-si->i[0];
-}
-
 
 /* FUNCTION PROTOTYPES BEGIN  ( by funcprototypes.pl ) */
 interval *alloc_interval(IndexType start, IndexType end, int c);
@@ -65,8 +57,16 @@ static inline void release_interval(interval *si) {
   if (si->n<=0 && !si->kids && !si->next) free_interval(si);
 }
 
+static inline void interval_alloc_kids_array(interval *si, int asize) {
+  si->kids=(interval **)calloc(asize,sizeof(interval*));
+}
+
 /* Return length of interval */
 static inline IndexType interval_length(interval *si) { if (si) return si->i[1]-si->i[0]; return 0; }
+
+// interval_width is synonymous with above
+#define interval_width interval_length
+//static inline IndexType interval_width(interval *si) { return si->i[1]-si->i[0]; }
 
 // Duplicate interval, but don't copy n, etc
 static inline interval *dup_interval(interval *si) {

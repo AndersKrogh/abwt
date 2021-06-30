@@ -7,36 +7,36 @@ The abwt package is licensed under the GPLv3, see the file LICENSE.
 
 /*
   The FM index (fmi) is used to identify the number of times the letter c occurred BEFORE
-  the current location k. (This is how it is in this implementation, others may include
-  current location in count).
+  the current location k.
 
   In this implementation, the BWT is recoded. For each segment of 256, for each letter
-  (alphabetically) it stores the letter its position k modulus 256. For interval
-  k in [i*256,(i+1)*256[.
-  Assume the BWT is "224310330335421122" it looks like this (k0=i*256)
-     position    letter    value
-    rel. to k0           rel. to k0
+  (alphabetically) it stores the letter its position k modulus 256. 
+
+  Assume the BWT starting at positionn k0=i*256 is "224310330335421122...." and that
+  there are n0 0s, n1 1s, etc and define b1=n0, b2=n0+n1, b3=n0+n1+n2, etc
+  Then it looks like this:
+     position    letter   value in array = 
+     in array             position in BWT minus k0
         0           0        5
         1           0        8
         :           :        :
-       n0-1         0        x
+       b1-1         0        x
 
-       n0           1        4
-       n0+1         1       14
-       n0+2         1       15
+       b1           1        4
+       b1+1         1       14
+       b1+2         1       15
         :           :        :
-     n0+n1-1        1        x
+       b2-1         1        x
 
-     n0+n1          2        0
-     n0+n1+1        2        1
-     n0+n1+2        2       13
-     n0+n1+3        2       16
-     n0+n1+4        2       17
+       b2           2        0
+       b2+1         2        1
+       b2+2         2       13
+       b2+3         2       16
+       b2+4         2       17
         :           :        :
         :           :        :
 
-  For each 256 the count so far and the number of each letter in the interval are
-  stored.
+  For each 256 the counts so far and the numbers b1, b2, ... are stored.
 
   Additionally, we use the actual suffix array (SA)
   position of the corresponding suffix rather than the number from the
@@ -71,8 +71,6 @@ FMI *read_fmi(FILE *fp) {
 }
 
 
-
-
 void write_fmi(const FMI *f, FILE *fp) {
   write_fmi_common(f, sizeof(ushort)+sizeof(uchar), fp);
   // fwrite(f->startLcode,sizeof(int),f->alen+1,fp);
@@ -91,8 +89,8 @@ void write_fmi(const FMI *f, FILE *fp) {
   At each checkpoint 2, an array of bytes (length alen) holds information about
   the beginning of position array for each letter.
   The begining of the first array is always zero.
-  The first byte gives the number of the last array with non-zero length.
-  Arrays after the last have (nonsense) begining set to 0
+  The first byte gives the letter of the last array with non-zero length.
+  Arrays after the last have (nonsense) beginning set to 0
 
   The array starts after the array of shorts in the checkpoint
 
@@ -104,20 +102,31 @@ void write_fmi(const FMI *f, FILE *fp) {
   For the very last entry at the end of the bwt, the actual begin is recorded for
   all letters (since it is not 256 even if length is zero).
 */
-static inline int get_start_and_length(uchar c, FMI *f, IndexType k, int *l) {
-  uchar *a;
-  int b, e, L;
+static inline uchar *beginarray(FMI *f, IndexType k, int *L) {
   IndexType c2 = (k>>ex2);
+  // index2 is an array of counts for each letter (unsigned short int)
+  // the "begin array" is stored after that
+  // Length of array = size2 unless at end
+  *L = fmi_end_length(k&round2, f->bwtlen);
+  return (uchar *)(f->index2[i2]+f->alen);
+}
 
-  a = (uchar *)(f->index2[c2]+f->alen);
-  L = fmi_end_length(k&round2, f->bwtlen);
-
+static inline int get_start_and_length_from_a(uchar c, uchar *a, int L, int *l) {
+  int b;
   if (c>a[0]) { *l=0; return 0; }
   if (c==0) b=0;
   else b=a[c];
   if (c==a[0]) *l = L-b;
   else *l=a[c+1]-b;
   return b;
+}
+
+static inline int get_start_and_length(uchar c, FMI *f, IndexType k, int *l) {
+  uchar *a;
+  int L;
+
+  a = beginarray(f,k,&L);
+  return get_start_and_length_from_a(c,a,L,l);
 }
 
 
@@ -132,7 +141,9 @@ static inline IndexType fmi_chpt_value(const FMI *f, const IndexType k, const uc
 
 
 /*
-  Binary search for integer closest to k and < k in sorted array *a of
+  NOT TESTED/OPTIMIZED
+
+  Binary search for closest integer <= k in sorted array *a of
   length l all numbers are positive <256
 
   Returns index+1 (=the number of letters before k)
@@ -144,6 +155,10 @@ static inline int ubsearch(uchar *a, int l, uchar k) {
   if (a[l-1] < k) return l;
 
   min=0; max=l-1;
+  // Initial guess
+  i = (k*l)>>8;
+  if (a[i] >= k) max=i-1;
+
   while (min<=max) {
     i = (max+min)>>1;  // midpoint
     if (a[i] >= k) max=i-1;
@@ -158,18 +173,16 @@ static inline int ubsearch(uchar *a, int l, uchar k) {
 
 
 /*
-  Very simple linear search for integer closest to k and < k in sorted array *a of
-  length l. All numbers are positive <256
+  Linear search for closest integer <= k in sorted array *a of length l.
 
-  This function assumes that the numbers in the array are pretty uniformly distributed
-  between 0 and 256.
-  Initial guess of position in array is l* k/256
+  Initial guess of position in array is l*k/256
+  A good guess if the numbers in the array are pretty uniformly
+  distributed between 0 and 256.
 
   Returns index+1 (=the number of letters before k)
 */
 static inline int gsearch(uchar *a, int l, uchar k) {
-  int i,min,max;
-  const double c=1.0/256;
+  int i;
 
   if (l==0 || a[0]>=k) return 0;
   if (a[l-1] < k) return l;
@@ -177,10 +190,10 @@ static inline int gsearch(uchar *a, int l, uchar k) {
   // Now a[0] < k <= a[l-1]
 
   // Initial guess
-  i = (int) c*(k*l);
+  i = (k*l)>>8;
 
   while ( a[i]< k ) ++i;   // Makes a[i]>=k
-  while ( a[i]>=k ) --i;   // Makes a[i]<k && a[i+1]>k
+  while ( a[i]>=k ) --i;   // Makes a[i]<k && a[i+1]>=k
 
   return i+1;
 }
@@ -193,7 +206,6 @@ IndexType FMindex(FMI *f, uchar ct, IndexType k) {
   IndexType fmi;
   IndexType k2;
   int b, l;
-
 
   // FMI values from check points
   fmi = fmi_chpt_value(f, k, ct);
@@ -222,8 +234,8 @@ IndexType FMindex(FMI *f, uchar ct, IndexType k) {
 IndexType FMindexCurrent(FMI *f, uchar *c, IndexType k) {
   IndexType fmi;
   IndexType k2, ch2;
-  int b, l, i;
-  uchar ct, *bwt, klocal;
+  int b, l, i, L;
+  uchar ct, *bwt, klocal, *barray;
 
   // Suffix position for checkpoint 2 closest to k 
   k2 = k&round2;
@@ -232,9 +244,10 @@ IndexType FMindexCurrent(FMI *f, uchar *c, IndexType k) {
 
   bwt = f->bwt+k2;
   klocal = (uchar)(k-k2);
+  barray = beginarray(f, k, &L);
 
   for (ct=0; ct<f->alen; ++ct) {
-    b = get_start_and_length(ct, f, k, &l);
+    b = get_start_and_length_from_a(ct, barray, L, &l);
     if (l==0) continue;
     i = SEARCH(bwt+b, l, klocal);
     // Did we find the letter?
@@ -252,18 +265,77 @@ IndexType FMindexCurrent(FMI *f, uchar *c, IndexType k) {
 
 
 
+/* Return the letter (in *c) and the FMI value for the BWT letter at
+   position k
+
+   This is the most problematic task with this index structure:
+   the BWT letter at pos. k is not immediately accessible.
+
+   We have to search through all letters!
+*/
+IndexType fmi_get_letter(FMI *f, uchar *c, IndexType k) {
+  IndexType fmi;
+  IndexType k2, ch2;
+  int b, l, i, L;
+  uchar ct, *bwt, klocal, *barray;
+
+  // Suffix position for checkpoint 2 closest to k 
+  k2 = k&round2;
+  // Index of checkpoint 2
+  ch2 = k>>ex2;
+
+  bwt = f->bwt+k2;
+  klocal = (uchar)(k-k2);
+  barray = beginarray(f, k, &L);
+
+  for (ct=0; ct<f->alen; ++ct) {
+    b = get_start_and_length_from_a(ct, barray, L, &l);
+    if (l==0) continue;
+    i = SEARCH(bwt+b, l, klocal);
+    // Did we find the letter?
+    if ( i<l && *(bwt+b+i)==klocal ) break;
+  }
+
+  // Return the letter in *c
+  *c = ct;
+
+  // FMI values from check points
+  fmi = i + f->index1[k>>ex1][ct] + f->index2[ch2][ct];
+
+  return fmi;
+}
+
+
 
 /*
   Return the FMI value for all letters at position k
   A result (fmia) array of length alen must be supplied (not checked!)
-  Not much optimization can be done, so it is just using the FMindex function.
 */
 void FMindexAll(FMI *f, IndexType k, IndexType *fmia) {
-  uchar c;
-  for (c=0; c<f->alen; ++c) fmia[c] = FMindex(f, c, k);
+  IndexType fmi;
+  IndexType k2, ch1, ch2;
+  int i, b, l, L;
+  uchar ct, *bwt, klocal, *barray;
+
+  // Suffix position for checkpoint 2 closest to k 
+  k2 = k&round2;
+  // Index of checkpoints
+  ch1 = k>>ex1;
+  ch2 = k>>ex2;
+
+  bwt = f->bwt+k2;
+  klocal = (uchar)(k-k2);
+  barray = beginarray(f, k, &L);
+
+  for (ct=0; ct<f->alen; ++ct) fmia[ct] = f->index1[ch1][ct] + f->index2[ch2][ct];
+
+  b=0;
+  for (ct=0; ct<barray[0]; ++ct) {
+    fmia[ct] += SEARCH(bwt+b, barray[ct+1]-b, klocal);
+    b = barray[ct+1];
+  }
+  fmia[ct] += SEARCH(bwt+b, L-b, klocal);
 }
-
-
 
 
 

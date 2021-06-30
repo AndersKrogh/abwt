@@ -471,7 +471,7 @@ uchar *get_bwt(const FMI *f, const IndexType start, const IndexType length) {
 
 /*
   Get all FMI values for letters in an interval
-  The si->kids->i[c] are assumed to be NULL
+  The si->kids[c] are assumed to be NULL
 
   THIS DOES NOT WORK WITH FUNNY FMI (there is no fmi_get_letter)
 */

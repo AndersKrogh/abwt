@@ -21,13 +21,12 @@ or for some other alphabet
    makeabwt -a abcdefgHIJK -o outputname infilename.fsa
 
 It can also take sequences on stdin, in which case you have to give
-the filesize in millions of letters (rounded up), e.g. -l 3000
-corresponding to 3 billion letters.
+the approximate filesize in millions of letters (rounded up), e.g.
+-l 3000 corresponding to 3 billion letters.
 
-Files are created with outputname followed by the extension fmi
-
+Files are created with outputname followed by an extension.
 While running, the program creates a couple of temporary files, which
-are deleted at the end.
+are deleted at the end. The final index has extension .fmi
 
 See options below
 ---
