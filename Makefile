@@ -1,6 +1,7 @@
 # This file is part of the abwt package.
-# Copyright 2016-2019 by Anders Krogh.
+# Copyright 2016-2021 by Anders Krogh.
 # The abwt package is licensed under the GPLv3, see the file LICENSE.
+
 
 # for profilling use "make PROF=-pg"
 
