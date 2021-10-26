@@ -63,7 +63,7 @@ Print intervals as separate sequences.
 
 VALUE char* newChar|c NULL
 Replace characters in regions with this. E.g. '-c N' will change all
-characters to N in each of the intervals given. (With -r, in the
+characters to N in each of the intervals given. (With -i, in the
 intervening regions instead.)
 
 SWITCH int invert|i 0
@@ -86,7 +86,7 @@ Line length for fasta output
 
 SWITCH int normalIntervals|n 0
 In the bed format (default) counting starts at 0 and interval ends is
-the base after the interva. So \"chr3 0 2\" corresponds to the first two
+the base after the interval. So \"chr3 0 2\" corresponds to the first two
 bases of chr3. If you are not a computer scientist and use \"chr 1 2\" to
 specify the first two bases, use this option, -n.
 
